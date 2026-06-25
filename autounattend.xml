@@ -25,7 +25,6 @@
  
  <settings pass="specialize">
      <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
-         <ComputerName>*</ComputerName>
      </component>
      <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
          <RunSynchronous>
@@ -486,47 +485,63 @@ try {
 }
      </File>
      
-     <File path="C:\Windows\Setup\Scripts\Specialize.ps1">
+     
+<File path="C:\Windows\Setup\Scripts\Specialize.ps1">
 $scripts = @(
  { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Dsh" /v AllowNewsAndInterests /t REG_DWORD /d 0 /f; };
  { reg.exe add "HKLM\Software\Policies\Microsoft\Edge" /v NewTabPageContentEnabled /t REG_DWORD /d 0 /f; };
  { reg.exe add "HKLM\Software\Policies\Microsoft\Edge" /v NewTabPageQuickLinksEnabled /t REG_DWORD /d 0 /f; };
+
+ #Nome do computador baseado no SERIAL NUMBER
  {
-     $rand = Get-Random -Minimum 1 -Maximum 100000;
-     $newName = "PBTEMP" + $rand.ToString("00000");
-     Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name 'ComputerName' -Value $newName -Force;
-     Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -Name 'ComputerName' -Value $newName -Force;
-     Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name 'Hostname' -Value $newName -Force;
-     Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name 'NV Hostname' -Value $newName -Force;
+     
+if ($serial.Length -ge 6) {
+    $suffix = $serial.Substring($serial.Length - 6)
+    $newName = "PB-" + $suffix
+    Rename-Computer -NewName $newName -Force
  };
+
  { Remove-Item -LiteralPath 'Registry::HKLM\Software\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\DevHomeUpdate' -Force -ErrorAction 'SilentlyContinue'; };
  { Remove-Item -LiteralPath 'Registry::HKLM\Software\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\OutlookUpdate' -Force -ErrorAction 'SilentlyContinue'; };
+
  { reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Communications" /v ConfigureChatAutoInstall /t REG_DWORD /d 0 /f; };
- { &amp; 'C:\Windows\Setup\Scripts\RemovePackages.ps1'; };
- { &amp; 'C:\Windows\Setup\Scripts\RemoveCapabilities.ps1'; };
- { &amp; 'C:\Windows\Setup\Scripts\RemoveFeatures.ps1'; };
+
+ { & 'C:\Windows\Setup\Scripts\RemovePackages.ps1'; };
+ { & 'C:\Windows\Setup\Scripts\RemoveCapabilities.ps1'; };
+ { & 'C:\Windows\Setup\Scripts\RemoveFeatures.ps1'; };
+
  {
      reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" /v BypassNRO /t REG_DWORD /d 1 /f;
  };
+
  { net.exe accounts /maxpwage:UNLIMITED; };
+
  { reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f };
+
  {
      netsh.exe advfirewall firewall set rule group="@FirewallAPI.dll,-28752" new enable=Yes;
      reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f;
  };
+
  { Remove-Item -LiteralPath 'C:\Users\Public\Desktop\Microsoft Edge.lnk' -ErrorAction 'SilentlyContinue' -Verbose; };
- { Set-ExecutionPolicy -Scope 'LocalMachine' -ExecutionPolicy 'RemoteSigned' -Force; };
+
+ { Set-ExecutionPolicy -Scope 'LocalMachine' -ExecutionPolicy RemoteSigned -Force; };
+
  {
      reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\BootAnimation" /v DisableStartupSound /t REG_DWORD /d 1 /f;
      reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\EditionOverrides" /v UserSetting_DisableStartupSound /t REG_DWORD /d 1 /f;
  };
+
  { reg.exe add "HKLM\Software\Policies\Microsoft\Windows\CloudContent" /v "DisableWindowsConsumerFeatures" /t REG_DWORD /d 1 /f; };
  { reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\BitLocker" /v "PreventDeviceEncryption" /t REG_DWORD /d 1 /f; };
  { reg.exe add "HKLM\Software\Policies\Microsoft\Edge" /v HideFirstRunExperience /t REG_DWORD /d 1 /f; };
- { &amp; 'C:\Windows\Setup\Scripts\unattend-01.ps1'; };
+
+ { & 'C:\Windows\Setup\Scripts\unattend-01.ps1'; };
 );
-&amp; { foreach( $script in $scripts ) { &amp; $script; } } *&gt;&amp;1 | Out-String -Width 1KB -Stream &gt;&gt; "C:\Windows\Setup\Scripts\Specialize.log";
-     </File>
+
+& { foreach( $script in $scripts ) { & $script; } } *>&1 |
+Out-String -Width 1KB -Stream >> "C:\Windows\Setup\Scripts\Specialize.log";
+</File>
      
      <File path="C:\Windows\Setup\Scripts\UserOnce.ps1">
 $scripts = @(
