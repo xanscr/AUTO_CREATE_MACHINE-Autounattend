@@ -288,25 +288,29 @@ function Start-WaitWithTimeout {
 }
 
 function Install-Package {
- param([string]$Name, [string]$Path, [string]$Type, [string]$ExeArgs = "", [int]$Timeout = 60)
- $FullPath = Join-Path $InstallDir $Path
- if (-not (Test-Path -LiteralPath $FullPath)) { Write-Log "[$Name] Ficheiro nao encontrado. A ignorar..." "WARN"; return }
- $fileName = Split-Path $FullPath -Leaf
- $pkgLog   = Join-Path $LogRoot ($fileName + ".log")
- 
- Write-Log "[$Name] A iniciar instalacao..."
- if ($Type -eq "MSI") { $args = "/i `"$FullPath`" /qn /norestart /L*v `"$pkgLog`""; $exe = "msiexec.exe" }
- elseif ($Type -eq "MSP") { $args = "/p `"$FullPath`" /qn /norestart /L*v `"$pkgLog`""; $exe = "msiexec.exe" }
- elseif ($Type -eq "EXE") { 
-     if ($ExeArgs -match "{LOGPATH}") { $ExeArgs = $ExeArgs -replace "{LOGPATH}", $pkgLog }
-     $args = $ExeArgs; $exe = $FullPath
- }
- else { return }
- 
- $r = Start-WaitWithTimeout -FilePath $exe -ArgumentList $args -TimeoutMinutes $Timeout
- if ($r.ExitCode -eq 0 -or $r.ExitCode -eq 3010) { Write-Log "[$Name] Finalizado com SUCESSO. ExitCode=$($r.ExitCode)" "SUCCESS" }
- else { Write-Log "[$Name] Finalizado com AVISO. ExitCode=$($r.ExitCode)" "WARN" }
-}
+    param([string]$Name, [string]$Path, [string]$Type, [string]$ExeArgs = "", [int]$Timeout = 60)
+    $FullPath = Join-Path $InstallDir $Path
+    if (-not (Test-Path -LiteralPath $FullPath)) { Write-Log "[$Name] Ficheiro nao encontrado. A ignorar..." "WARN"; return }
+    $fileName = Split-Path $FullPath -Leaf
+    $pkgLog   = Join-Path $LogRoot ($fileName + ".log")
+    
+    Write-Log "[$Name] A iniciar instalacao..."
+    if ($Type -eq "MSI") { $args = "/i `"$FullPath`" /qn /norestart /L*v `"$pkgLog`""; $exe = "msiexec.exe" }
+    elseif ($Type -eq "MSP") { $args = "/p `"$FullPath`" /qn /norestart /L*v `"$pkgLog`""; $exe = "msiexec.exe" }
+    elseif ($Type -eq "EXE") { 
+        if ($ExeArgs -match "{LOGPATH}") { $ExeArgs = $ExeArgs -replace "{LOGPATH}", $pkgLog }
+        $args = $ExeArgs; $exe = $FullPath
+    }
+    else { return }
+    
+    $r = Start-WaitWithTimeout -FilePath $exe -ArgumentList $args -TimeoutMinutes $Timeout
+    
+    # NOVO: Pausa de 10 segundos apos CADA instalacao para garantir que o msiexec liberta o sistema
+    Write-Log "[$Name] Aguardando libertacao do sistema..."
+    Start-Sleep -Seconds 10 
+    
+    if ($r.ExitCode -eq 0 -or $r.ExitCode -eq 3010) { Write-Log "[$Name] Finalizado com SUCESSO. ExitCode=$($r.ExitCode)" "SUCCESS" }
+    else { Write-Log "[$Name] Finalizado com AVISO. ExitCode=$($r.ExitCode)" "WARN" }
 
 Write-Host "`n===============================================" -ForegroundColor Magenta
 Write-Host "   INICIO DA INSTALACAO DE SOFTWARE (PB)       " -ForegroundColor Magenta
@@ -315,19 +319,19 @@ Write-Host "===============================================" -ForegroundColor Ma
 if (-not (Test-Path $InstallDir)) { Write-Log "Pasta Installers não existe." "ERROR"; exit 1 }
 
 $AppList = @(
- @{ Name="7-Zip";        Path="7zip\7z2600-x64.msi";                               Type="MSI"; Args="" },
- @{ Name="Adobe Pro";    Path="Adobe\AcroPro.msi";                                 Type="MSI"; Args=""; Timeout=120 },
- @{ Name="Adobe Patch";  Path="Adobe\AcroRdrDCx64Upd2400220857_MUI.msp";           Type="MSP"; Args=""; Timeout=60 },
- @{ Name="Adobe Reader"; Path="AcroRdr_ALS\AcroRdrALSDx64_2300820421_all_DC.msi"; Type="MSI"; Args=""; Timeout=120 },
- @{ Name="FileOpen";     Path="FileOpen\FileOpenInstaller64.msi";                  Type="MSI"; Args="" },
- @{ Name="FortiClient";  Path="FortiClient\FortiClient_6.0.msi";                   Type="MSI"; Args="" },
- @{ Name="Chrome";       Path="Google\googlechromestandaloneenterprise64.msi";     Type="MSI"; Args="" },
- @{ Name="Java";         Path="Java\jre1.8.0_46164.msi";                           Type="MSI"; Args="" },
- @{ Name="PDFsam";       Path="PDF_sam\pdfsam-basic-5.4.5-windows-x64.msi";        Type="MSI"; Args="" },
- @{ Name="PDF24";        Path="PDF24Creator\pdf24-creator-11.30.0-x64.msi";        Type="MSI"; Args="DESKTOPICONS=No REGISTERREADER=No AUTOUPDATE=No FAXPRINTER=No" },
- @{ Name="PDFCreator";   Path="PDFCreator\PDFCreator-5_3_3-Setup.exe";             Type="EXE"; Args='/COMPONENTS="program" /LANG=english /VERYSILENT /SUPPRESSMSGBOXES /SP- /NORESTART /LogFile="{LOGPATH}"' },
- @{ Name="Power BI";     Path="Powerbi\PBIDesktopSetup_x64.exe";                   Type="EXE"; Args="/quiet /norestart ACCEPT_EULA=1"; Timeout=8 },
- @{ Name="AnyDesk";      Path="Anydesk\PBRemoteAnyDeskClient_9.0.8.msi";           Type="MSI"; Args="" }
+    @{ Name="7-Zip";        Path="7zip\7z2600-x64.msi";                               Type="MSI"; Args="" },
+    @{ Name="AnyDesk";      Path="Anydesk\PBRemoteAnyDeskClient_9.0.8.msi";           Type="MSI"; Args="" },
+    @{ Name="Adobe Pro";    Path="Adobe\AcroPro.msi";                                 Type="MSI"; Args=""; Timeout=120 },
+    @{ Name="Adobe Patch";  Path="Adobe\AcroRdrDCx64Upd2400220857_MUI.msp";           Type="MSP"; Args=""; Timeout=60 },
+    @{ Name="Adobe Reader"; Path="AcroRdr_ALS\AcroRdrALSDx64_2300820421_all_DC.msi"; Type="MSI"; Args=""; Timeout=120 },
+    @{ Name="FileOpen";     Path="FileOpen\FileOpenInstaller64.msi";                  Type="MSI"; Args="" },
+    @{ Name="FortiClient";  Path="FortiClient\FortiClient_6.0.msi";                   Type="MSI"; Args="" },
+    @{ Name="Chrome";       Path="Google\googlechromestandaloneenterprise64.msi";     Type="MSI"; Args="" },
+    @{ Name="Java";         Path="Java\jre1.8.0_46164.msi";                           Type="MSI"; Args="" },
+    @{ Name="PDFsam";       Path="PDF_sam\pdfsam-basic-5.4.5-windows-x64.msi";        Type="MSI"; Args="" },
+    @{ Name="PDF24";        Path="PDF24Creator\pdf24-creator-11.30.0-x64.msi";        Type="MSI"; Args="DESKTOPICONS=No REGISTERREADER=No AUTOUPDATE=No FAXPRINTER=No" },
+    @{ Name="PDFCreator";   Path="PDFCreator\PDFCreator-5_3_3-Setup.exe";             Type="EXE"; Args='/COMPONENTS="program" /LANG=english /VERYSILENT /SUPPRESSMSGBOXES /SP- /NORESTART /LogFile="{LOGPATH}"' },
+    @{ Name="Power BI";     Path="Powerbi\PBIDesktopSetup_x64.exe";                   Type="EXE"; Args="/quiet /norestart ACCEPT_EULA=1"; Timeout=5 }
 )
 
 foreach ($App in $AppList) {
