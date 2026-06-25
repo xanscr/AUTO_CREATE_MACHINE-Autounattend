@@ -376,8 +376,8 @@ if (Test-Path $officeExe) {
 # === PASSO EXTRA: COPILOT (DISPARA E ESQUECE) ===
 $copilotExe = Join-Path $InstallDir "COPILOT\Microsoft 365 Copilot Installer.exe"
 if (Test-Path $copilotExe) {
- Write-Log "[Copilot] A acionar instalador em background..."
- Start-Process -FilePath $copilotExe -WindowStyle Normal
+    Write-Log "[Copilot] A instalar..."
+    Start-Process -FilePath $copilotExe -WindowStyle Normal -Wait
 }
 
 Write-Host "==== FIM DO SCRIPT DE SOFTWARE ====`n" -ForegroundColor Magenta
@@ -494,11 +494,11 @@ $scripts = @(
 
  #Nome do computador baseado no SERIAL NUMBER
  {
-     
-if ($serial.Length -ge 6) {
-    $suffix = $serial.Substring($serial.Length - 6)
-    $newName = "PB-" + $suffix
-    Rename-Computer -NewName $newName -Force
+     $serial = (Get-CimInstance -ClassName Win32_BIOS).SerialNumber;
+     if ($serial -and $serial.Length -ge 6) {
+         $suffix = $serial.Substring($serial.Length - 6);
+         Rename-Computer -NewName "PB-$suffix" -Force;
+     }
  };
 
  { Remove-Item -LiteralPath 'Registry::HKLM\Software\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\DevHomeUpdate' -Force -ErrorAction 'SilentlyContinue'; };
@@ -615,9 +615,15 @@ $scripts = @(
  };
  {
      netsh.exe wlan add profile filename="C:\Windows\Setup\Scripts\Wifi.xml" user=all;
-     netsh.exe wlan connect name="PB-GUEST" ssid="PB-GUEST";
-     Write-Output 'A aguardar negociacao de IP e acesso a Internet...';
-     while (!(Test-Connection -ComputerName 8.8.8.8 -Count 1 -Quiet -ErrorAction SilentlyContinue)) { Start-Sleep -Seconds 2 }
+    netsh.exe wlan connect name="PB-GUEST" ssid="PB-GUEST";
+    Write-Output 'A aguardar negociacao de IP e acesso a Internet (Bloqueio estrito)...';
+    
+    while (!(Test-Connection -ComputerName 8.8.8.8 -Count 1 -Quiet -ErrorAction SilentlyContinue)) { 
+        Write-Output 'Rede indisponivel. A re-testar em 5 segundos...';
+        Start-Sleep -Seconds 5; 
+    }
+    
+    Write-Output 'Acesso a Internet confirmado. A iniciar instalacoes...';
  };
  {
      Write-Output 'A procurar a pasta Installers na pen USB...';
