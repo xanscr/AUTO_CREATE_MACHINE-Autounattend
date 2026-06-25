@@ -328,9 +328,8 @@ $AppList = @(
     @{ Name="PDFsam";       Path="PDF_sam\pdfsam-basic-5.4.5-windows-x64.msi";        Type="MSI"; Args="" },
     @{ Name="PDF24";        Path="PDF24Creator\pdf24-creator-11.30.0-x64.msi";        Type="MSI"; Args="DESKTOPICONS=No REGISTERREADER=No AUTOUPDATE=No FAXPRINTER=No" },
     @{ Name="PDFCreator";   Path="PDFCreator\PDFCreator-5_3_3-Setup.exe";             Type="EXE"; Args='/COMPONENTS="program" /LANG=english /VERYSILENT /SUPPRESSMSGBOXES /SP- /NORESTART /LogFile="{LOGPATH}"' },
-    @{ Name="Power BI";     Path="Powerbi\PBIDesktopSetup_x64.exe";                   Type="EXE"; Args='-quiet -norestart ACCEPT_EULA=1' },
+    @{ Name="Power BI";     Path="Powerbi\PBIDesktopSetup_x64.exe";                   Type="EXE"; Args="/quiet /norestart ACCEPT_EULA=1"; Timeout=8 },
     @{ Name="AnyDesk";      Path="Anydesk\PBRemoteAnyDeskClient_9.0.8.msi";           Type="MSI"; Args="" },
-    @{ Name="Copilot";      Path="COPILOT\Microsoft 365 Copilot Installer.exe";       Type="EXE"; Args="/S" }
 )
 
 foreach ($App in $AppList) {
@@ -371,7 +370,14 @@ if ($p.WaitForExit(120 * 60 * 1000)) {
     Write-Log "[Office 365] Demorou demasiado tempo. A forcar encerramento..." "ERROR"
     $p.Kill() 
 }
-
+# === PASSO EXTRA: COPILOT (DISPARA E ESQUECE) ===
+$copilotExe = Join-Path $InstallDir "COPILOT\Microsoft 365 Copilot Installer.exe"
+if (Test-Path $copilotExe) {
+    Write-Log "[Copilot] A acionar instalador em background..."
+    # Corremos SEM o parâmetro -Wait para o script não ficar congelado na Microsoft Store
+    Start-Process -FilePath $copilotExe -WindowStyle Normal
+}
+# ================================================           
 Write-Host "==== FIM DO SCRIPT DE SOFTWARE ====`n" -ForegroundColor Magenta
 Start-Sleep -Seconds 3
         </File>
