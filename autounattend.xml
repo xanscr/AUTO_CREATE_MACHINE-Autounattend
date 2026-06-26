@@ -233,17 +233,24 @@ function Write-Log {
 try {
  $powercfg = Join-Path $env:windir 'System32\powercfg.exe'
  $balancedGuid = '381b4222-f694-41f0-9685-ff5bb260df2e'
+ 
+ Write-Log "A configurar Acao de Fechar a Tampa..."
+ $subLid = '4f971e89-eebd-4455-a8de-9e59040e7347'
+ $settingLid = '5ca83367-6e45-459f-a27b-476b1d01c936'
+ & $powercfg /SetAcValueIndex $balancedGuid $subLid $settingLid 0
+ & $powercfg /SetDcValueIndex $balancedGuid $subLid $settingLid 0
+ 
  Write-Log "A ativar plano Equilibrado..."
- &amp; $powercfg /SetActive $balancedGuid | Out-Null
- &amp; $powercfg /Change monitor-timeout-dc 3
- &amp; $powercfg /Change monitor-timeout-ac 5
- &amp; $powercfg /Change standby-timeout-dc 0
- &amp; $powercfg /Change standby-timeout-ac 0
- &amp; $powercfg /Change hibernate-timeout-dc 0
- &amp; $powercfg /Change hibernate-timeout-ac 0
- &amp; $powercfg /Change disk-timeout-dc 0
- &amp; $powercfg /Change disk-timeout-ac 0
- &amp; $powercfg /S $balancedGuid | Out-Null
+ & $powercfg /SetActive $balancedGuid | Out-Null
+ & $powercfg /Change monitor-timeout-dc 3
+ & $powercfg /Change monitor-timeout-ac 5
+ & $powercfg /Change standby-timeout-dc 0
+ & $powercfg /Change standby-timeout-ac 0
+ & $powercfg /Change hibernate-timeout-dc 0
+ & $powercfg /Change hibernate-timeout-ac 0
+ & $powercfg /Change disk-timeout-dc 0
+ & $powercfg /Change disk-timeout-ac 0
+ & $powercfg /S $balancedGuid | Out-Null
  Write-Log "Configuracao aplicada com sucesso."
 }
 catch {
@@ -491,6 +498,9 @@ $scripts = @(
  { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Dsh" /v AllowNewsAndInterests /t REG_DWORD /d 0 /f; };
  { reg.exe add "HKLM\Software\Policies\Microsoft\Edge" /v NewTabPageContentEnabled /t REG_DWORD /d 0 /f; };
  { reg.exe add "HKLM\Software\Policies\Microsoft\Edge" /v NewTabPageQuickLinksEnabled /t REG_DWORD /d 0 /f; };
+ { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableSmartScreen /t REG_DWORD /d 0 /f; };
+ { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v SmartScreenEnabled /t REG_DWORD /d 0 /f; };
+ { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v PUAProtection /t REG_DWORD /d 0 /f; };
 
  #Nome do computador baseado no SERIAL NUMBER
  {
@@ -642,10 +652,12 @@ $scripts = @(
      }
  };
  {
-     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"C:\Windows\Setup\Scripts\unattend-02.ps1`"" -WindowStyle Normal -Wait;
+     # DRIVERS PRIMEIRO: Ativa o hardware (I2C/Trackpad) imediatamente
+     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"C:\Windows\Setup\Scripts\unattend-03.ps1`"" -WindowStyle Normal -Wait;
  };
  {
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"C:\Windows\Setup\Scripts\unattend-03.ps1`"" -WindowStyle Normal -Wait;
+     # SOFTWARE DEPOIS: Executa as instalações pesadas já com o PC responsivo
+     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"C:\Windows\Setup\Scripts\unattend-02.ps1`"" -WindowStyle Normal -Wait;
  };
  { Remove-Item -LiteralPath @( 'C:\Windows\Panther\unattend.xml'; 'C:\Windows\Setup\Scripts\Wifi.xml' ) -Force -ErrorAction 'SilentlyContinue'; };
 );
