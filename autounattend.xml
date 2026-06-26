@@ -501,6 +501,7 @@ $scripts = @(
  { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableSmartScreen /t REG_DWORD /d 0 /f; };
  { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v SmartScreenEnabled /t REG_DWORD /d 0 /f; };
  { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v PUAProtection /t REG_DWORD /d 0 /f; };
+ { reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy" /v VerifiedAndReputablePolicyState /t REG_DWORD /d 0 /f; };
 
  #Nome do computador baseado no SERIAL NUMBER
  {
@@ -509,6 +510,20 @@ $scripts = @(
          $suffix = $serial.Substring($serial.Length - 6);
          Rename-Computer -NewName "PB-$suffix" -Force;
      }
+ };
+
+ # Injetar Modelo e SN nas Configuracoes do Sistema (OEM Information)
+ {
+     $cs = Get-CimInstance -ClassName Win32_ComputerSystem;
+     $bios = Get-CimInstance -ClassName Win32_BIOS;
+     $regPath = 'Registry::HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation';
+     
+     if (!(Test-Path -LiteralPath $regPath)) { 
+         New-Item -Path $regPath -Force | Out-Null; 
+     }
+     
+     Set-ItemProperty -LiteralPath $regPath -Name 'Manufacturer' -Value $cs.Manufacturer -Force;
+     Set-ItemProperty -LiteralPath $regPath -Name 'Model' -Value ($cs.Model + ' | SN: ' + $bios.SerialNumber) -Force;
  };
 
  { Remove-Item -LiteralPath 'Registry::HKLM\Software\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\DevHomeUpdate' -Force -ErrorAction 'SilentlyContinue'; };
@@ -555,11 +570,12 @@ Out-String -Width 1KB -Stream &gt;&gt; "C:\Windows\Setup\Scripts\Specialize.log"
      
      <File path="C:\Windows\Setup\Scripts\UserOnce.ps1">
 $scripts = @(
- {
-     $infoCmd = "`$serial = (Get-CimInstance -ClassName Win32_Bios).SerialNumber; `n" +
+ {{
+     $infoCmd = "`$model = (Get-CimInstance -ClassName Win32_ComputerSystem).Model; `n" +
+                "`$serial = (Get-CimInstance -ClassName Win32_Bios).SerialNumber; `n" +
                 "Write-Host '=== INFORMACOES DE FABRICA E REDE ===' -ForegroundColor Cyan; `n" +
+                "Write-Host 'MODELO / SN     : ' -NoNewline -ForegroundColor Yellow; Write-Host (`$model + ' | SN: ' + `$serial); `n" +
                 "Write-Host 'NOME DA MAQUINA : ' -NoNewline -ForegroundColor Yellow; Write-Host `$env:COMPUTERNAME; `n" +
-                "Write-Host 'NUMERO DE SERIE : ' -NoNewline -ForegroundColor Yellow; Write-Host `$serial; `n" +
                 "Write-Host '-----------------------------------------------' -ForegroundColor Gray; `n" +
                 "Get-NetAdapter | Select-Object Name, Status, MacAddress | Format-Table -AutoSize; `n" +
                 "Get-NetIPAddress -AddressFamily IPv4 | Where-Object InterfaceAlias -notmatch 'Loopback' | Select-Object InterfaceAlias, IPAddress | Format-Table -AutoSize; `n" +
@@ -652,12 +668,12 @@ $scripts = @(
      }
  };
  {
-     # DRIVERS PRIMEIRO: Ativa o hardware (I2C/Trackpad) imediatamente
-     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"C:\Windows\Setup\Scripts\unattend-03.ps1`"" -WindowStyle Normal -Wait;
+     # SOFTWARE PRIMEIRO: Instala Office, Adobe, etc.
+     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"C:\Windows\Setup\Scripts\unattend-02.ps1`"" -WindowStyle Normal -Wait;
  };
  {
-     # SOFTWARE DEPOIS: Executa as instalações pesadas já com o PC responsivo
-     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"C:\Windows\Setup\Scripts\unattend-02.ps1`"" -WindowStyle Normal -Wait;
+     # DRIVERS DEPOIS: Inicia a pesquisa do Windows Update para hardware
+     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"C:\Windows\Setup\Scripts\unattend-03.ps1`"" -WindowStyle Normal -Wait;
  };
  { Remove-Item -LiteralPath @( 'C:\Windows\Panther\unattend.xml'; 'C:\Windows\Setup\Scripts\Wifi.xml' ) -Force -ErrorAction 'SilentlyContinue'; };
 );
