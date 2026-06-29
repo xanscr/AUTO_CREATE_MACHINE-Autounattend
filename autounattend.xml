@@ -280,12 +280,12 @@ function Write-Log {
 }
 
 function Start-WaitWithTimeout {
- param([Parameter(Mandatory=$true)][string]$FilePath, [Parameter(Mandatory=$true)][string]$ArgumentList, [int]$TimeoutMinutes = 60)
+ param([Parameter(Mandatory=$true)][string]$FilePath, [Parameter(Mandatory=$true)][string]$ArgumentList, [int]$TimeoutMinutes = 60, [string]$WindowStyle = 'Hidden')
  if ($FilePath -match "^[a-zA-Z]:\\") {
      $workDir = Split-Path $FilePath -Parent
-     $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $workDir -PassThru -WindowStyle Hidden
+     $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $workDir -PassThru -WindowStyle $WindowStyle
  } else {
-     $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -WindowStyle Hidden
+     $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -WindowStyle $WindowStyle
  }
  $timeoutMs = $TimeoutMinutes * 60 * 1000
  if ($p.WaitForExit($timeoutMs)) { return @{ ExitCode = $p.ExitCode; TimedOut = $false } }
@@ -293,22 +293,23 @@ function Start-WaitWithTimeout {
 }
 
 function Install-Package {
-    param([string]$Name, [string]$Path, [string]$Type, [string]$ExeArgs = "", [int]$Timeout = 60)
+    param([string]$Name, [string]$Path, [string]$Type, [string]$ExeArgs = "", [int]$Timeout = 60, [bool]$Show = $false)
     $FullPath = Join-Path $InstallDir $Path
     if (-not (Test-Path -LiteralPath $FullPath)) { Write-Log "[$Name] Ficheiro nao encontrado. A ignorar..." "WARN"; return }
     $fileName = Split-Path $FullPath -Leaf
     $pkgLog   = Join-Path $LogRoot ($fileName + ".log")
-    
+    $windowStyle = if ($Show) { 'Normal' } else { 'Hidden' }
+
     Write-Log "[$Name] A iniciar instalacao..."
     if ($Type -eq "MSI") { $args = "/i `"$FullPath`" /qn /norestart /L*v `"$pkgLog`""; $exe = "msiexec.exe" }
     elseif ($Type -eq "MSP") { $args = "/p `"$FullPath`" /qn /norestart /L*v `"$pkgLog`""; $exe = "msiexec.exe" }
-    elseif ($Type -eq "EXE") { 
+    elseif ($Type -eq "EXE") {
         if ($ExeArgs -match "{LOGPATH}") { $ExeArgs = $ExeArgs -replace "{LOGPATH}", $pkgLog }
         $args = $ExeArgs; $exe = $FullPath
     }
     else { return }
-    
-    $r = Start-WaitWithTimeout -FilePath $exe -ArgumentList $args -TimeoutMinutes $Timeout
+
+    $r = Start-WaitWithTimeout -FilePath $exe -ArgumentList $args -TimeoutMinutes $Timeout -WindowStyle $windowStyle
     
     # NOVO: Pausa de 10 segundos apos CADA instalacao para garantir que o msiexec liberta o sistema
     Write-Log "[$Name] Aguardando libertacao do sistema..."
@@ -337,12 +338,13 @@ $AppList = @(
     @{ Name="PDFsam";       Path="PDF_sam\pdfsam-basic-5.4.5-windows-x64.msi";          Type="MSI"; Args="" },
     @{ Name="PDF24";        Path="PDF24Creator\pdf24-creator-11.30.0-x64.msi";          Type="MSI"; Args="DESKTOPICONS=No REGISTERREADER=No AUTOUPDATE=No FAXPRINTER=No" },
     @{ Name="PDFCreator";   Path="PDFCreator\PDFCreator-5_3_3-Setup.exe";               Type="EXE"; Args='/COMPONENTS="program" /LANG=english /VERYSILENT /SUPPRESSMSGBOXES /SP- /NORESTART /LogFile="{LOGPATH}"' },
-    @{ Name="Power BI";     Path="Powerbi\PBIDesktopSetup_x64.exe";                     Type="EXE"; Args="/quiet /norestart ACCEPT_EULA=1"; Timeout=8 }
+    @{ Name="Power BI";     Path="Powerbi\PBIDesktopSetup_x64.exe";                     Type="EXE"; Args="/quiet /norestart ACCEPT_EULA=1"; Timeout=45; Show=$true }
 )
 
 foreach ($App in $AppList) {
  $timeout = if ($App.ContainsKey('Timeout')) { $App.Timeout } else { 60 }
- Install-Package -Name $App.Name -Path $App.Path -Type $App.Type -ExeArgs $App.Args -Timeout $timeout
+ $show    = if ($App.ContainsKey('Show')) { $App.Show } else { $false }
+ Install-Package -Name $App.Name -Path $App.Path -Type $App.Type -ExeArgs $App.Args -Timeout $timeout -Show $show
 }
 
 Write-Log "==== UPDATES OEM (PASSO INTERMEDIO VISUAL) ===="
