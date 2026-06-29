@@ -250,7 +250,6 @@ try {
  &amp; $powercfg /Change hibernate-timeout-ac 0
  &amp; $powercfg /Change disk-timeout-dc 0
  &amp; $powercfg /Change disk-timeout-ac 0
- &amp; $powercfg /S $balancedGuid | Out-Null
  Write-Log "Configuracao aplicada com sucesso."
 }
 catch {
@@ -570,7 +569,7 @@ Out-String -Width 1KB -Stream &gt;&gt; "C:\Windows\Setup\Scripts\Specialize.log"
      
      <File path="C:\Windows\Setup\Scripts\UserOnce.ps1">
 $scripts = @(
- {{
+ {
      $infoCmd = "`$model = (Get-CimInstance -ClassName Win32_ComputerSystem).Model; `n" +
                 "`$serial = (Get-CimInstance -ClassName Win32_Bios).SerialNumber; `n" +
                 "Write-Host '=== INFORMACOES DE FABRICA E REDE ===' -ForegroundColor Cyan; `n" +
@@ -597,7 +596,7 @@ $scripts = @(
  {
      try {
          reg.exe load "HKU\DefaultUserClean" "C:\Users\Default\NTUSER.DAT" | Out-Null
-         reg.exe delete "HKU\DefaultUserClean\Software\Microsoft\Windows\CurrentVersion\RunOnce" /v "UnattendedSetup" /f -ErrorAction SilentlyContinue | Out-Null
+         reg.exe delete "HKU\DefaultUserClean\Software\Microsoft\Windows\CurrentVersion\RunOnce" /v "UnattendedSetup" /f 2>$null | Out-Null
          reg.exe unload "HKU\DefaultUserClean" | Out-Null
      } catch {}
  };
@@ -610,7 +609,7 @@ $scripts = @(
  { reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v "HideFileExt" /t REG_DWORD /d 0 /f; };
  { reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowTaskViewButton /t REG_DWORD /d 0 /f; };
  { reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarEndTask /t REG_DWORD /d 1 /f; };
- { reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\Shell\Bags\1\Desktop" /v IconSize /t REG_DWORD /d 16 /f; };
+ { reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\Shell\Bags\1\Desktop" /v IconSize /t REG_DWORD /d 32 /f; };
  {
      reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel" /v "{20D04FE0-3AEA-1069-A2D8-08002B30309D}" /t REG_DWORD /d 0 /f;
      reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel" /v "{59031a47-3f72-44a7-89c5-5595fe6b30ee}" /t REG_DWORD /d 0 /f;
@@ -640,18 +639,6 @@ $scripts = @(
      }
  };
  {
-    netsh.exe wlan add profile filename="C:\Windows\Setup\Scripts\Wifi.xml" user=all;
-    netsh.exe wlan connect name="PB-GUEST" ssid="PB-GUEST";
-    Write-Output 'A aguardar negociacao de IP e acesso a Internet (Bloqueio estrito)...';
-    
-    while (!(Test-Connection -ComputerName 8.8.8.8 -Count 1 -Quiet -ErrorAction SilentlyContinue)) { 
-        Write-Output 'Rede indisponivel. A re-testar em 5 segundos...';
-        Start-Sleep -Seconds 5; 
-    }
-    
-    Write-Output 'Acesso a Internet confirmado. A iniciar instalacoes...';
- };
- {
      Write-Output 'A procurar a pasta Installers na pen USB...';
      $found = $false;
      foreach( $drive in (Get-PSDrive -PSProvider FileSystem).Name ) {
@@ -666,6 +653,20 @@ $scripts = @(
          }
          if ($found) { break; }
      }
+ };
+ {
+    netsh.exe wlan add profile filename="C:\Windows\Setup\Scripts\Wifi.xml" user=all;
+    netsh.exe wlan connect name="PB-GUEST" ssid="PB-GUEST";
+    Write-Output 'A aguardar negociacao de IP e acesso a Internet...';
+
+    $deadline = [datetime]::Now.AddMinutes(10);
+    while (!(Test-Connection -ComputerName 8.8.8.8 -Count 1 -Quiet -ErrorAction SilentlyContinue)) {
+        if ([datetime]::Now -gt $deadline) { Write-Output 'Timeout de rede. A continuar sem internet...'; break; }
+        Write-Output 'Rede indisponivel. A re-testar em 5 segundos...';
+        Start-Sleep -Seconds 5;
+    }
+
+    Write-Output 'A iniciar instalacoes...';
  };
  {
      # SOFTWARE PRIMEIRO: Instala Office, Adobe, etc.
