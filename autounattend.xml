@@ -250,7 +250,6 @@ try {
  &amp; $powercfg /Change hibernate-timeout-ac 0
  &amp; $powercfg /Change disk-timeout-dc 0
  &amp; $powercfg /Change disk-timeout-ac 0
- &amp; $powercfg /S $balancedGuid | Out-Null
  Write-Log "Configuracao aplicada com sucesso."
 }
 catch {
@@ -281,12 +280,12 @@ function Write-Log {
 }
 
 function Start-WaitWithTimeout {
- param([Parameter(Mandatory=$true)][string]$FilePath, [Parameter(Mandatory=$true)][string]$ArgumentList, [int]$TimeoutMinutes = 60)
+ param([Parameter(Mandatory=$true)][string]$FilePath, [Parameter(Mandatory=$true)][string]$ArgumentList, [int]$TimeoutMinutes = 60, [string]$WindowStyle = 'Hidden')
  if ($FilePath -match "^[a-zA-Z]:\\") {
      $workDir = Split-Path $FilePath -Parent
-     $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $workDir -PassThru -WindowStyle Hidden
+     $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $workDir -PassThru -WindowStyle $WindowStyle
  } else {
-     $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -WindowStyle Hidden
+     $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -WindowStyle $WindowStyle
  }
  $timeoutMs = $TimeoutMinutes * 60 * 1000
  if ($p.WaitForExit($timeoutMs)) { return @{ ExitCode = $p.ExitCode; TimedOut = $false } }
@@ -294,22 +293,23 @@ function Start-WaitWithTimeout {
 }
 
 function Install-Package {
-    param([string]$Name, [string]$Path, [string]$Type, [string]$ExeArgs = "", [int]$Timeout = 60)
+    param([string]$Name, [string]$Path, [string]$Type, [string]$ExeArgs = "", [int]$Timeout = 60, [bool]$Show = $false)
     $FullPath = Join-Path $InstallDir $Path
     if (-not (Test-Path -LiteralPath $FullPath)) { Write-Log "[$Name] Ficheiro nao encontrado. A ignorar..." "WARN"; return }
     $fileName = Split-Path $FullPath -Leaf
     $pkgLog   = Join-Path $LogRoot ($fileName + ".log")
-    
+    $windowStyle = if ($Show) { 'Normal' } else { 'Hidden' }
+
     Write-Log "[$Name] A iniciar instalacao..."
-    if ($Type -eq "MSI") { $args = "/i `"$FullPath`" /qn /norestart /L*v `"$pkgLog`""; $exe = "msiexec.exe" }
-    elseif ($Type -eq "MSP") { $args = "/p `"$FullPath`" /qn /norestart /L*v `"$pkgLog`""; $exe = "msiexec.exe" }
-    elseif ($Type -eq "EXE") { 
+    if ($Type -eq "MSI") { $args = "/i `"$FullPath`" /qn /norestart /L*v `"$pkgLog`""; if ($ExeArgs) { $args += " $ExeArgs" }; $exe = "msiexec.exe" }
+    elseif ($Type -eq "MSP") { $args = "/p `"$FullPath`" /qn /norestart /L*v `"$pkgLog`""; if ($ExeArgs) { $args += " $ExeArgs" }; $exe = "msiexec.exe" }
+    elseif ($Type -eq "EXE") {
         if ($ExeArgs -match "{LOGPATH}") { $ExeArgs = $ExeArgs -replace "{LOGPATH}", $pkgLog }
         $args = $ExeArgs; $exe = $FullPath
     }
     else { return }
-    
-    $r = Start-WaitWithTimeout -FilePath $exe -ArgumentList $args -TimeoutMinutes $Timeout
+
+    $r = Start-WaitWithTimeout -FilePath $exe -ArgumentList $args -TimeoutMinutes $Timeout -WindowStyle $windowStyle
     
     # NOVO: Pausa de 10 segundos apos CADA instalacao para garantir que o msiexec liberta o sistema
     Write-Log "[$Name] Aguardando libertacao do sistema..."
@@ -332,18 +332,19 @@ $AppList = @(
     @{ Name="Adobe Patch";  Path="Adobe\AcroRdrDCx64Upd2400220857_MUI.msp";             Type="MSP"; Args=""; Timeout=60 },
     @{ Name="Adobe Reader"; Path="AcroRdr_ALS\AcroRdrALSDx64_2300820421_all_DC.msi"; Type="MSI"; Args=""; Timeout=120 },
     @{ Name="FileOpen";     Path="FileOpen\FileOpenInstaller64.msi";                    Type="MSI"; Args="" },
-    @{ Name="FortiClient";  Path="FortiClient\FortiClient_6.0.msi";                     Type="MSI"; Args="" },
+    @{ Name="FortiClient";  Path="FortiClient\FortiClient_6.0.msi";                     Type="MSI"; Args="ADDLOCAL=VPN" },
     @{ Name="Chrome";       Path="Google\googlechromestandaloneenterprise64.msi";       Type="MSI"; Args="" },
     @{ Name="Java";         Path="Java\jre1.8.0_46164.msi";                             Type="MSI"; Args="" },
     @{ Name="PDFsam";       Path="PDF_sam\pdfsam-basic-5.4.5-windows-x64.msi";          Type="MSI"; Args="" },
-    @{ Name="PDF24";        Path="PDF24Creator\pdf24-creator-11.30.0-x64.msi";          Type="MSI"; Args="DESKTOPICONS=No REGISTERREADER=No AUTOUPDATE=No FAXPRINTER=No" },
+    @{ Name="PDF24";        Path="PDF24Creator\pdf24-creator-11.30.0-x64.msi";          Type="MSI"; Args="DESKTOPICONS=No REGISTERREADER=No AUTOUPDATE=No FAXPRINTER=No TRAYICON=No" },
     @{ Name="PDFCreator";   Path="PDFCreator\PDFCreator-5_3_3-Setup.exe";               Type="EXE"; Args='/COMPONENTS="program" /LANG=english /VERYSILENT /SUPPRESSMSGBOXES /SP- /NORESTART /LogFile="{LOGPATH}"' },
-    @{ Name="Power BI";     Path="Powerbi\PBIDesktopSetup_x64.exe";                     Type="EXE"; Args="/quiet /norestart ACCEPT_EULA=1"; Timeout=8 }
+    @{ Name="Power BI";     Path="Powerbi\PBIDesktopSetup_x64.exe";                     Type="EXE"; Args="/quiet /norestart ACCEPT_EULA=1"; Timeout=45; Show=$true }
 )
 
 foreach ($App in $AppList) {
  $timeout = if ($App.ContainsKey('Timeout')) { $App.Timeout } else { 60 }
- Install-Package -Name $App.Name -Path $App.Path -Type $App.Type -ExeArgs $App.Args -Timeout $timeout
+ $show    = if ($App.ContainsKey('Show')) { $App.Show } else { $false }
+ Install-Package -Name $App.Name -Path $App.Path -Type $App.Type -ExeArgs $App.Args -Timeout $timeout -Show $show
 }
 
 Write-Log "==== UPDATES OEM (PASSO INTERMEDIO VISUAL) ===="
@@ -570,7 +571,7 @@ Out-String -Width 1KB -Stream &gt;&gt; "C:\Windows\Setup\Scripts\Specialize.log"
      
      <File path="C:\Windows\Setup\Scripts\UserOnce.ps1">
 $scripts = @(
- {{
+ {
      $infoCmd = "`$model = (Get-CimInstance -ClassName Win32_ComputerSystem).Model; `n" +
                 "`$serial = (Get-CimInstance -ClassName Win32_Bios).SerialNumber; `n" +
                 "Write-Host '=== INFORMACOES DE FABRICA E REDE ===' -ForegroundColor Cyan; `n" +
@@ -590,6 +591,17 @@ $scripts = @(
  { Set-ItemProperty -LiteralPath 'Registry::HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name 'LaunchTo' -Type 'DWord' -Value 1; };
  { Set-ItemProperty -LiteralPath 'Registry::HKCU\Software\Microsoft\Windows\CurrentVersion\Search' -Name 'SearchboxTaskbarMode' -Type 'DWord' -Value 0; };
  {
+     $p = 'Registry::HKCU\SOFTWARE\pdfforge\PDFCreator\Settings'
+     if (Test-Path $p) { Set-ItemProperty -LiteralPath $p -Name 'Language' -Value 'en' -Force }
+ };
+ {
+     $p = 'Registry::HKCU\Software\PDF24\Services\pdf24-toolbox'
+     if (Test-Path $p) {
+         Set-ItemProperty -LiteralPath $p -Name 'language' -Value 'en' -Force
+         Set-ItemProperty -LiteralPath $p -Name 'trayIconVisible' -Value 'false' -Force
+     }
+ };
+ {
      Get-Process -Name 'explorer' -ErrorAction 'SilentlyContinue' | Where-Object -FilterScript {
          $_.SessionId -eq ( Get-Process -Id $PID ).SessionId;
      } | Stop-Process -Force;
@@ -597,7 +609,7 @@ $scripts = @(
  {
      try {
          reg.exe load "HKU\DefaultUserClean" "C:\Users\Default\NTUSER.DAT" | Out-Null
-         reg.exe delete "HKU\DefaultUserClean\Software\Microsoft\Windows\CurrentVersion\RunOnce" /v "UnattendedSetup" /f -ErrorAction SilentlyContinue | Out-Null
+         reg.exe delete "HKU\DefaultUserClean\Software\Microsoft\Windows\CurrentVersion\RunOnce" /v "UnattendedSetup" /f 2>$null | Out-Null
          reg.exe unload "HKU\DefaultUserClean" | Out-Null
      } catch {}
  };
@@ -610,7 +622,7 @@ $scripts = @(
  { reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v "HideFileExt" /t REG_DWORD /d 0 /f; };
  { reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowTaskViewButton /t REG_DWORD /d 0 /f; };
  { reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarEndTask /t REG_DWORD /d 1 /f; };
- { reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\Shell\Bags\1\Desktop" /v IconSize /t REG_DWORD /d 16 /f; };
+ { reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\Shell\Bags\1\Desktop" /v IconSize /t REG_DWORD /d 32 /f; };
  {
      reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel" /v "{20D04FE0-3AEA-1069-A2D8-08002B30309D}" /t REG_DWORD /d 0 /f;
      reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel" /v "{59031a47-3f72-44a7-89c5-5595fe6b30ee}" /t REG_DWORD /d 0 /f;
@@ -640,18 +652,6 @@ $scripts = @(
      }
  };
  {
-    netsh.exe wlan add profile filename="C:\Windows\Setup\Scripts\Wifi.xml" user=all;
-    netsh.exe wlan connect name="PB-GUEST" ssid="PB-GUEST";
-    Write-Output 'A aguardar negociacao de IP e acesso a Internet (Bloqueio estrito)...';
-    
-    while (!(Test-Connection -ComputerName 8.8.8.8 -Count 1 -Quiet -ErrorAction SilentlyContinue)) { 
-        Write-Output 'Rede indisponivel. A re-testar em 5 segundos...';
-        Start-Sleep -Seconds 5; 
-    }
-    
-    Write-Output 'Acesso a Internet confirmado. A iniciar instalacoes...';
- };
- {
      Write-Output 'A procurar a pasta Installers na pen USB...';
      $found = $false;
      foreach( $drive in (Get-PSDrive -PSProvider FileSystem).Name ) {
@@ -666,6 +666,20 @@ $scripts = @(
          }
          if ($found) { break; }
      }
+ };
+ {
+    netsh.exe wlan add profile filename="C:\Windows\Setup\Scripts\Wifi.xml" user=all;
+    netsh.exe wlan connect name="PB-GUEST" ssid="PB-GUEST";
+    Write-Output 'A aguardar negociacao de IP e acesso a Internet...';
+
+    $deadline = [datetime]::Now.AddMinutes(10);
+    while (!(Test-Connection -ComputerName 8.8.8.8 -Count 1 -Quiet -ErrorAction SilentlyContinue)) {
+        if ([datetime]::Now -gt $deadline) { Write-Output 'Timeout de rede. A continuar sem internet...'; break; }
+        Write-Output 'Rede indisponivel. A re-testar em 5 segundos...';
+        Start-Sleep -Seconds 5;
+    }
+
+    Write-Output 'A iniciar instalacoes...';
  };
  {
      # SOFTWARE PRIMEIRO: Instala Office, Adobe, etc.
