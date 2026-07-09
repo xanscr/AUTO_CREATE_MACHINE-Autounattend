@@ -332,7 +332,7 @@ $AppList = @(
     @{ Name="Adobe Patch";  Path="Adobe\AcroRdrDCx64Upd2400220857_MUI.msp";             Type="MSP"; Args=""; Timeout=60 },
     @{ Name="Adobe Reader"; Path="AcroRdr_ALS\AcroRdrALSDx64_2300820421_all_DC.msi"; Type="MSI"; Args=""; Timeout=120 },
     @{ Name="FileOpen";     Path="FileOpen\FileOpenInstaller64.msi";                    Type="MSI"; Args="" },
-    @{ Name="FortiClient";  Path="FortiClient\FortiClient_6.0.msi";                     Type="MSI"; Args="ADDLOCAL=VPN" },
+    @{ Name="FortiClient";  Path="FortiClient\FortiClient_6.0.msi";                     Type="MSI"; Args="" },
     @{ Name="Chrome";       Path="Google\googlechromestandaloneenterprise64.msi";       Type="MSI"; Args="" },
     @{ Name="Java";         Path="Java\jre1.8.0_46164.msi";                             Type="MSI"; Args="" },
     @{ Name="PDFsam";       Path="PDF_sam\pdfsam-basic-5.4.5-windows-x64.msi";          Type="MSI"; Args="" },
