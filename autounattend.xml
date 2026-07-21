@@ -633,6 +633,11 @@ $scripts = @(
 $scripts = @(
  { Set-ItemProperty -LiteralPath 'Registry::HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'AutoLogonCount' -Type 'DWord' -Force -Value 0; };
  {
+     reg.exe load "HKU\DefaultUserCleanup" "C:\Users\Default\NTUSER.DAT" 2>$null | Out-Null
+     reg.exe delete "HKU\DefaultUserCleanup\Software\Microsoft\Windows\CurrentVersion\RunOnce" /v "UnattendedSetup" /f 2>$null | Out-Null
+     reg.exe unload "HKU\DefaultUserCleanup" 2>$null | Out-Null
+ };
+ {
      $name = 'WlanSvc';
      $start = [datetime]::Now;
      $timeout = $start.AddMinutes( 1 );
@@ -681,11 +686,6 @@ $scripts = @(
  {
      # DRIVERS DEPOIS: Inicia a pesquisa do Windows Update para hardware
      Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"C:\Windows\Setup\Scripts\unattend-03.ps1`"" -WindowStyle Normal -Wait;
- };
- {
-     reg.exe load "HKU\DefaultUserCleanup" "C:\Users\Default\NTUSER.DAT" 2>$null | Out-Null
-     reg.exe delete "HKU\DefaultUserCleanup\Software\Microsoft\Windows\CurrentVersion\RunOnce" /v "UnattendedSetup" /f 2>$null | Out-Null
-     reg.exe unload "HKU\DefaultUserCleanup" 2>$null | Out-Null
  };
  { Remove-Item -LiteralPath @( 'C:\Windows\Panther\unattend.xml'; 'C:\Windows\Setup\Scripts\Wifi.xml' ) -Force -ErrorAction 'SilentlyContinue'; };
 );
